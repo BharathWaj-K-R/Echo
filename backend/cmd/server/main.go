@@ -74,17 +74,23 @@ func main() {
 	router.GET("/entries/:id/similar", func(c *gin.Context) { api.GetSimilar(c, db, redisClient) })
 	router.GET("/health", api.Health)
 
-	// Serve built static assets from frontend/dist
+	// Serve all static files from frontend/dist
 	router.Static("/assets", "./frontend/dist/assets")
 	router.StaticFile("/favicon.svg", "./frontend/dist/favicon.svg")
+	router.StaticFile("/favicon.ico", "./frontend/dist/favicon.svg") // redirect .ico requests to svg
+	router.StaticFile("/robots.txt", "./frontend/dist/robots.txt")
 
-	// SPA router fallback for TanStack Router (client-side)
+	// SPA router fallback — everything else gets index.html except API routes
 	router.NoRoute(func(c *gin.Context) {
-		if !strings.HasPrefix(c.Request.URL.Path, "/entries") && c.Request.URL.Path != "/health" {
-			c.File("./frontend/dist/index.html")
+		path := c.Request.URL.Path
+		// Never serve index.html for API or asset paths
+		if strings.HasPrefix(path, "/entries") ||
+			strings.HasPrefix(path, "/assets") ||
+			path == "/health" {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Not Found"})
 			return
 		}
-		c.JSON(http.StatusNotFound, gin.H{"error": "Not Found"})
+		c.File("./frontend/dist/index.html")
 	})
 
 	go poller.StartPoller(context.Background(), db)
