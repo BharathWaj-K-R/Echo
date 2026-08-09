@@ -1,0 +1,8 @@
+# Exclude large directories from Docker build context
+frontend/node_modules
+frontend/.output
+frontend/dist
+backend/tmp
+**/.git
+**/*.log
+web/

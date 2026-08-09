@@ -1,0 +1,15 @@
+# Secrets — never commit
+.env
+
+# Build artifacts
+frontend/dist
+frontend/.output
+frontend/.wrangler
+frontend/node_modules
+web/node_modules
+web/.next
+backend/tmp
+
+# OS
+.DS_Store
+Thumbs.db
