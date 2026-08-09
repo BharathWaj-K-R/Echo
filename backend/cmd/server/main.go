@@ -76,7 +76,7 @@ func main() {
 
 	// Serve built static assets from frontend/dist
 	router.Static("/assets", "./frontend/dist/assets")
-	router.StaticFile("/favicon.ico", "./frontend/dist/favicon.ico")
+	router.StaticFile("/favicon.svg", "./frontend/dist/favicon.svg")
 
 	// SPA router fallback for TanStack Router (client-side)
 	router.NoRoute(func(c *gin.Context) {
