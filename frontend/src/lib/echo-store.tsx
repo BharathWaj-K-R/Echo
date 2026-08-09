@@ -76,7 +76,7 @@ function daysAgo(d: number, hour: number) {
 
 type Ctx = {
   entries: Entry[];
-  addEntry: (e: Omit<Entry, "id" | "created_at">) => Entry;
+  addEntry: (e: Omit<Entry, "id" | "created_at"> & { id?: string; created_at?: string }) => Entry;
   deleteEntry: (id: string) => void;
   getEntry: (id: string) => Entry | undefined;
   similar: (id: string) => Entry[];
@@ -110,7 +110,11 @@ export function EchoProvider({ children }: { children: ReactNode }) {
     return {
       entries: sorted,
       addEntry: (e) => {
-        const entry: Entry = { ...e, id: crypto.randomUUID(), created_at: new Date().toISOString() };
+        const entry: Entry = {
+          ...e,
+          id: e.id ?? crypto.randomUUID(),
+          created_at: e.created_at ?? new Date().toISOString(),
+        };
         setEntries((prev) => [entry, ...prev]);
         return entry;
       },

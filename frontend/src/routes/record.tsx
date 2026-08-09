@@ -23,35 +23,29 @@ export const Route = createFileRoute("/record")({
   component: RecordPage,
 });
 
-const samples = [
-  {
-    transcript:
-      "Just needed a minute to say this out loud. Today moved fast, but I stayed with it and got through the part I was dreading.",
-    sentiment_score: 71,
-    mood_tags: ["steady", "relieved"],
-  },
-  {
-    transcript:
-      "Feeling stretched thin. Too many open loops and not enough quiet between them. Naming it helps a little.",
-    sentiment_score: 41,
-    mood_tags: ["overwhelmed", "honest"],
-  },
-  {
-    transcript:
-      "Good one today. Something small clicked and I noticed it while it was happening, which almost never happens.",
-    sentiment_score: 86,
-    mood_tags: ["bright", "present"],
-  },
-];
+// Convert a Blob to a base64 string
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const dataUrl = reader.result as string;
+      // Strip the "data:audio/...;base64," prefix
+      const base64 = dataUrl.split(",")[1];
+      if (base64) resolve(base64);
+      else reject(new Error("Failed to convert audio to base64"));
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
 
 function RecordPage() {
   const { addEntry } = useEcho();
   const navigate = useNavigate();
   const [recording, setRecording] = useState(false);
-  const [status, setStatus] = useState<"idle" | "recording" | "ready" | "processing" | "done">(
-    "idle",
-  );
+  const [status, setStatus] = useState<"idle" | "recording" | "ready" | "processing" | "done">("idle");
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [audioBlobRef, setAudioBlobRef] = useState<Blob | null>(null);
   const [seconds, setSeconds] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -72,6 +66,7 @@ function RecordPage() {
   const start = useCallback(async () => {
     setError(null);
     setAudioUrl(null);
+    setAudioBlobRef(null);
     setSeconds(0);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -79,8 +74,9 @@ function RecordPage() {
       chunksRef.current = [];
       recorder.ondataavailable = (e) => chunksRef.current.push(e.data);
       recorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+        const blob = new Blob(chunksRef.current, { type: recorder.mimeType || "audio/webm" });
         setAudioUrl(URL.createObjectURL(blob));
+        setAudioBlobRef(blob);
         setStatus("ready");
       };
       recorder.start();
@@ -103,18 +99,56 @@ function RecordPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [recording, start, stop]);
 
-  const submit = () => {
+  const submit = async () => {
+    if (!audioBlobRef) return;
     setStatus("processing");
-    const sample = samples[Math.floor(Math.random() * samples.length)]!;
-    setTimeout(() => {
-      const entry = addEntry(sample);
+    setError(null);
+
+    try {
+      // Convert audio blob to base64
+      const base64Audio = await blobToBase64(audioBlobRef);
+      const mimeType = audioBlobRef.type || "audio/webm";
+
+      // Send to backend
+      const response = await fetch("/entries", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ audio: base64Audio, mime_type: mimeType }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({ error: "Server error" }));
+        throw new Error((data as { error?: string }).error ?? "Failed to process entry");
+      }
+
+      const data = await response.json() as {
+        id: string;
+        transcript: string;
+        sentiment_score: number;
+        mood_tags: string[];
+        created_at: string;
+      };
+
+      // Save the real entry from backend into the local store
+      addEntry({
+        id: data.id,
+        transcript: data.transcript,
+        sentiment_score: data.sentiment_score,
+        mood_tags: data.mood_tags,
+        created_at: data.created_at,
+      });
+
       setStatus("done");
-      setTimeout(() => navigate({ to: "/entry/$id", params: { id: entry.id } }), 900);
-    }, 1200);
+      setTimeout(() => navigate({ to: "/entry/$id", params: { id: data.id } }), 900);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+      setStatus("ready");
+    }
   };
 
   const reset = () => {
     setAudioUrl(null);
+    setAudioBlobRef(null);
     setSeconds(0);
     setStatus("idle");
   };
@@ -126,14 +160,16 @@ function RecordPage() {
     <div className="mx-auto max-w-[640px] px-4 py-10 text-center">
       <h1 className="text-2xl font-bold tracking-tight">Record your moment</h1>
       <p className="mt-1 text-sm text-muted-foreground">
-        Speak for as long as you like. Press <kbd className="rounded border border-border px-1">Space</kbd> to start or stop.
+        Speak for as long as you like. Press{" "}
+        <kbd className="rounded border border-border px-1">Space</kbd> to start or stop.
       </p>
 
       <div className="mt-8 rounded-2xl border border-border p-8">
         <button
           onClick={recording ? stop : start}
+          disabled={status === "processing"}
           aria-label={recording ? "Stop recording" : "Start recording"}
-          className={`mx-auto grid size-28 place-items-center rounded-full text-primary-foreground transition-transform hover:scale-105 ${
+          className={`mx-auto grid size-28 place-items-center rounded-full text-primary-foreground transition-transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed ${
             recording ? "animate-pulse-glow bg-destructive" : "bg-primary"
           }`}
         >
@@ -158,7 +194,7 @@ function RecordPage() {
           {status === "idle" && "Tap the mic to start recording"}
           {status === "recording" && `Recording… ${mmss}`}
           {status === "ready" && `Recorded ${mmss} — preview it below`}
-          {status === "processing" && "Processing your entry…"}
+          {status === "processing" && "Transcribing and analysing mood…"}
           {status === "done" && "Saved. Taking you to the entry…"}
         </p>
 
