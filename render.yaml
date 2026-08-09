@@ -28,6 +28,7 @@ services:
   - type: redis
     name: echo-cache
     plan: free
+    ipAllowList: []
 
 databases:
   - name: echo-postgres
