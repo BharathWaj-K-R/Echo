@@ -25,10 +25,10 @@ services:
     healthCheckPath: /health
     autoDeploy: true
 
-databases:
-  - name: echo-postgres
+  - type: redis
+    name: echo-cache
     plan: free
 
-redis:
-  - name: echo-cache
+databases:
+  - name: echo-postgres
     plan: free
