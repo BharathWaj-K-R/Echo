@@ -82,7 +82,28 @@ function Dashboard() {
           : null,
       });
     }
-    return days;
+
+    // Fill null gaps by linear interpolation so the line is continuous
+    const filled = [...days];
+    for (let i = 0; i < filled.length; i++) {
+      if (filled[i]!.mood !== null) continue;
+      // find nearest non-null neighbours
+      let left = i - 1;
+      let right = i + 1;
+      while (left >= 0 && filled[left]!.mood === null) left--;
+      while (right < filled.length && filled[right]!.mood === null) right++;
+      const lv = left >= 0 ? filled[left]!.mood! : null;
+      const rv = right < filled.length ? filled[right]!.mood! : null;
+      if (lv !== null && rv !== null) {
+        const span = right - left;
+        filled[i] = { ...filled[i]!, mood: Math.round(lv + ((rv - lv) * (i - left)) / span) };
+      } else if (lv !== null) {
+        filled[i] = { ...filled[i]!, mood: lv };
+      } else if (rv !== null) {
+        filled[i] = { ...filled[i]!, mood: rv };
+      }
+    }
+    return filled;
   }, [entries]);
 
 
