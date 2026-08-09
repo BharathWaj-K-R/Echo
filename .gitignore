@@ -10,6 +10,9 @@ web/node_modules
 web/.next
 backend/tmp
 
+# Zip artifacts
+*.zip
+
 # OS
 .DS_Store
 Thumbs.db
